@@ -202,56 +202,8 @@ class Schedule:
 
     def save_to_txt(self):
         self._schedule_format()
-        with open(f"{schedule_day.isoformat()}.txt", 'w') as f:
+        with open(f"{self.date.isoformat()}.txt", 'w') as f:
             f.write(self.schedule_str)
-
-    def read_from_txt(self, schedule_date):
-        try:
-            with open(f"{schedule_date}.txt", 'r') as f:
-                schedule_str = f.read()
-        except FileNotFoundError:
-            print(f"{err_msg}file not exists")
-            raise
-        else:
-            schedule_date_list = schedule_date.split('-')
-            year = int(schedule_date_list[0])
-            month = int(schedule_date_list[1])
-            day = int(schedule_date_list[2])
-
-            task_str_list = schedule_str.split('\n')
-
-            pat1 = re.compile(r"\((\d+?)\) (\d\d:\d\d)-(\d\d:\d\d) (\d+?)h (\d+?)min: (.+)")
-            pat2 = re.compile(r"\((\d+?)\)\s+(.+)")
-            for task_str in task_str_list:
-                rst1 = pat1.search(task_str)
-                rst2 = pat2.search(task_str)
-
-                if rst1:
-                    start_str = rst1.group(2)
-                    start_h = int(start_str.split(':')[0])
-                    start_min = int(start_str.split(':')[1])
-                    start = datetime.datetime(year=year, month=month, day=day, hour=start_h, minute=start_min)
-
-                    end_str = rst1.group(3)
-                    end_h = int(end_str.split(':')[0])
-                    end_min = int(end_str.split(':')[1])
-                    end = datetime.datetime(year=year, month=month, day=day, hour=end_h, minute=end_min)
-
-                    duration = end - start
-
-                    time_slice = TimeSlice(start, duration, end)
-                    task_name = rst1.group(6)
-                    task = Task(time_slice, task_name)
-
-                    self.task_list.append(task)
-                elif rst2:
-                    time_slice = copy.deepcopy(self.task_list[-1].time_slice)
-                    task_name = rst2.group(2)
-                    task = Task(time_slice, task_name)
-
-                    self.task_list.append(task)
-
-            self.display_schedule()
 
     def send_to_wechat(self):
         self._schedule_format()
@@ -260,6 +212,63 @@ class Schedule:
     def display_schedule(self):
         self._schedule_format()
         print(self.schedule_str)
+
+
+def read_from_txt(schedule_date):
+    # saves the current schedule
+    global schedule
+    if schedule.task_list:
+        schedule.save_to_txt()
+
+    try:
+        with open(f"{schedule_date}.txt", 'r') as f:
+            schedule_str = f.read()
+    except FileNotFoundError:
+        print(f"{err_msg}{schedule_date}.txt not exists")
+        raise
+    else:
+        schedule_date_list = schedule_date.split('-')
+        year = int(schedule_date_list[0])
+        month = int(schedule_date_list[1])
+        day = int(schedule_date_list[2])
+
+        # creates a new schedule obj to receives the schedule being read
+        schedule = Schedule(date=datetime.date(year=year, month=month, day=day))
+
+        task_str_list = schedule_str.split('\n')
+
+        pat1 = re.compile(r"\((\d+?)\) (\d\d:\d\d)-(\d\d:\d\d) (\d+?)h (\d+?)min: (.+)")
+        pat2 = re.compile(r"\((\d+?)\)\s+(.+)")
+        for task_str in task_str_list:
+            rst1 = pat1.search(task_str)
+            rst2 = pat2.search(task_str)
+
+            if rst1:
+                start_str = rst1.group(2)
+                start_h = int(start_str.split(':')[0])
+                start_min = int(start_str.split(':')[1])
+                start = datetime.datetime(year=year, month=month, day=day, hour=start_h, minute=start_min)
+
+                end_str = rst1.group(3)
+                end_h = int(end_str.split(':')[0])
+                end_min = int(end_str.split(':')[1])
+                end = datetime.datetime(year=year, month=month, day=day, hour=end_h, minute=end_min)
+
+                duration = end - start
+
+                time_slice = TimeSlice(start, duration, end)
+                task_name = rst1.group(6)
+                task = Task(time_slice, task_name)
+
+                schedule.task_list.append(task)
+            elif rst2:
+                time_slice = copy.deepcopy(schedule.task_list[-1].time_slice)
+                task_name = rst2.group(2)
+                task = Task(time_slice, task_name)
+
+                schedule.task_list.append(task)
+
+        schedule.display_schedule()
 
 
 def schedule_managing(parser):
@@ -271,8 +280,6 @@ def schedule_managing(parser):
 
             if args.save:
                 schedule.save_to_txt()
-            elif args.read:
-                schedule.read_from_txt(args.read)
             elif args.send:
                 schedule.send_to_wechat()
             elif args.display:
@@ -280,11 +287,13 @@ def schedule_managing(parser):
             elif args.quit:
                 schedule.save_to_txt()
                 break
+            elif args.read:
+                read_from_txt(args.read[0])
             else:
                 args.func(args)
         except:
-            print(traceback.format_exc())
-            # pass
+            # print(traceback.format_exc())
+            pass
 
 
 class ScheduleManagingArgTypeCheck:
@@ -301,7 +310,7 @@ class ScheduleManagingArgTypeCheck:
 
             hh, mm = divmod(time, 100)
             # raises ValueError if HH and MM does not satisfy the requirement of datetime.datetime()
-            time = datetime.datetime(year=schedule_day.year, month=schedule_day.month, day=schedule_day.day,
+            time = datetime.datetime(year=schedule.date.year, month=schedule.date.month, day=schedule.date.day,
                                      hour=hh, minute=mm)
 
             return time
@@ -343,6 +352,31 @@ class ScheduleManagingArgTypeCheck:
         except IndexError:
             raise argparse.ArgumentTypeError("index should be in [0, TASK_LIST_LEN - 1]")
 
+    @classmethod
+    def check_date(cls, date_input):
+        pat = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+        if not pat.search(date_input):
+            raise argparse.ArgumentTypeError("invalid date format. valid format: YYYY-MM-DD")
+        return date_input
+
+
+class ReadAction(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super(ReadAction, self).__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_strings=None):
+        if len(values) > 1:
+            print(f"{err_msg}expected one or no argument")
+            raise Exception
+        elif not len(values):
+            # -R
+            values = [schedule.date.strftime("%Y-%m-%d")]
+            setattr(namespace, self.dest, values)
+        else:
+            # -R date: YYYY-MM-DD
+            setattr(namespace, self.dest, values)
+
 
 class RestTimeAction(argparse.Action):
     def __init__(self, option_strings, dest, **kwargs):
@@ -350,7 +384,7 @@ class RestTimeAction(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         if len(values) > 1:
-            print(f"{err_msg}expected one argument")
+            print(f"{err_msg}expected one or no argument")
             raise Exception
         elif not len(values):
             # -r
@@ -362,19 +396,36 @@ class RestTimeAction(argparse.Action):
 
 
 if __name__ == '__main__':
-    schedule = Schedule()
-
     schedule_day = datetime.date.today() + datetime.timedelta(days=1)
+
+    schedule = Schedule(date=datetime.date(year=schedule_day.year, month=schedule_day.month, day=schedule_day.day))
 
     err_msg = "schedule_managing.py: error: "
 
     parser = argparse.ArgumentParser(description="schedule-managing.py - a tool for creating and managing schedules")
-    parser.add_argument("--run", "-r", action="store_true", help="run the program")
-    parser.add_argument("--quit", "-q", action="store_true", help="exit the program")
-    parser.add_argument("--save", "-s", action="store_true", help="save the schedule in a txt")
-    parser.add_argument("--read", "-R", action="store", help="read the schedule from its txt")
-    parser.add_argument("--send", "-S", action="store_true", help="send the schedule to wechat file helper")
-    parser.add_argument("--display", "-p", action="store_true", help="displays the schedule")
+    parser.add_argument("--run", "-r",
+                        action="store_true",
+                        help="run the program")
+    parser.add_argument("--quit", "-q",
+                        action="store_true",
+                        help="exit the program")
+    parser.add_argument("--today", "-t",
+                        action="store_true",
+                        help="create a schedule for today (for tomorrow by default)")
+    parser.add_argument("--save", "-s",
+                        action="store_true",
+                        help="save the schedule in a txt")
+    parser.add_argument("--read", "-R",
+                        action=ReadAction,
+                        nargs='*',
+                        type=ScheduleManagingArgTypeCheck.check_date,
+                        help="read the schedule from its txt")
+    parser.add_argument("--send", "-S",
+                        action="store_true",
+                        help="send the schedule to wechat file helper")
+    parser.add_argument("--display", "-p",
+                        action="store_true",
+                        help="displays the schedule")
 
     subparsers = parser.add_subparsers()
 
@@ -447,5 +498,8 @@ if __name__ == '__main__':
     delete_a_task_parser.set_defaults(func=lambda args: schedule.delete_a_task(args.task_index))
 
     args = parser.parse_args()
+
     if args.run:
+        if args.today:
+            schedule.date -= datetime.timedelta(days=1)
         schedule_managing(parser)

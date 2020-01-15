@@ -275,22 +275,22 @@ def schedule_managing(parser):
     while True:
         input_ = input()
 
-        try:
-            args = parser.parse_args(input_.split())
+        args = parser.parse_args(input_.split())
 
-            if args.save:
-                schedule.save_to_txt()
-            elif args.send:
-                schedule.send_to_wechat()
-            elif args.display:
-                schedule.display_schedule()
-            elif args.quit:
-                schedule.save_to_txt()
-                break
-            elif args.read:
-                read_from_txt(args.read[0])
-            else:
-                args.func(args)
+        if args.read:
+            read_from_txt(args.read[0])
+        if args.save:
+            schedule.save_to_txt()
+        if args.send:
+            schedule.send_to_wechat()
+        if args.display:
+            schedule.display_schedule()
+        if args.quit:
+            schedule.save_to_txt()
+            break
+
+        try:
+            args.func(args)
         except:
             # print(traceback.format_exc())
             pass
@@ -378,6 +378,15 @@ class ReadAction(argparse.Action):
             setattr(namespace, self.dest, values)
 
 
+class TaskAction(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super(TaskAction, self).__init__(option_strings, dest, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_strings=None):
+        values = ' '.join(values)
+        setattr(namespace, self.dest, values)
+
+
 class RestTimeAction(argparse.Action):
     def __init__(self, option_strings, dest, **kwargs):
         super(RestTimeAction, self).__init__(option_strings, dest, **kwargs)
@@ -448,7 +457,8 @@ if __name__ == '__main__':
                                             type=ScheduleManagingArgTypeCheck.check_time,
                                             help="end of the time slice")
     add_a_task_parser.add_argument("--task_name", "-t",
-                                   action="store",
+                                   action=TaskAction,
+                                   nargs="+",
                                    required=True,
                                    help="name of the task")
     add_a_task_parser.add_argument("--rest-duration", "-r",
@@ -472,7 +482,7 @@ if __name__ == '__main__':
                                       action="store",
                                       type=ScheduleManagingArgTypeCheck.check_time,
                                       help="start of the time slice")
-    modify_a_task_exclusive_group = modify_a_task_parser.add_mutually_exclusive_group(required=True)
+    modify_a_task_exclusive_group = modify_a_task_parser.add_mutually_exclusive_group()
     modify_a_task_exclusive_group.add_argument("--duration", "-d",
                                                action="store",
                                                type=ScheduleManagingArgTypeCheck.check_duration,
@@ -482,7 +492,8 @@ if __name__ == '__main__':
                                                type=ScheduleManagingArgTypeCheck.check_time,
                                                help="end of the time slice")
     modify_a_task_parser.add_argument("--task_name", "-t",
-                                      action="store",
+                                      action=TaskAction,
+                                      nargs='+',
                                       help="name of the task")
     modify_a_task_parser.set_defaults(func=lambda args: schedule.modify_a_task(
         args.task_index, args.start, args.duration, args.end, args.task_name))

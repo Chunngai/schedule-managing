@@ -35,6 +35,11 @@ class Schedule:
             self.task_list = []
         self.date = date
         self.schedule_str = schedule_str
+        self.path = os.path.join("schedule", f"{self.date.isoformat()}.txt")
+        self.saved = False
+
+    def set_path(self):
+        self.path = os.path.join("schedule", f"{self.date.isoformat()}.txt")
 
     def _task_append(self, new_task):
         if not self.task_list:
@@ -160,6 +165,7 @@ class Schedule:
             self._task_append(rest)
 
         self.display_schedule()
+        self.saved = False
 
     def modify_a_task(self, task_index, start, duration, end, task_name):
         # start or task name should be provided
@@ -198,15 +204,40 @@ class Schedule:
                 time_slice.end += time_delta
 
         self.display_schedule()
+        self.saved = False
 
     def delete_a_task(self, task_index):
         self.task_list.pop(task_index)
         self.display_schedule()
+        self.saved = False
 
     def save_to_txt(self):
+        if not self.task_list:
+            print("nothing saved. the task list is empty")
+            return
+
+        try:
+            with open(self.path) as f:
+                content = f.read()
+        except FileNotFoundError:
+            pass
+        else:
+            print(f"content in {os.path.basename(self.path)}:")
+            print(content)
+            input_ = input("override? (y/n)\n")
+            if input_ == 'y':
+                pass
+            elif input_ == 'n':
+                self.path = os.path.join("schedule", f"{self.date.isoformat()}_(copy).txt")
+            else:
+                print(f"{err_msg}valid input: y, n")
+                return
+
         self._schedule_format()
-        with open(os.path.join("schedule", f"{self.date.isoformat()}.txt"), 'w') as f:
+        with open(self.path, 'w') as f:
             f.write(self.schedule_str)
+
+        self.saved = True
 
     def send_to_wechat(self):
         self._schedule_format()
@@ -235,7 +266,7 @@ def read_from_txt(schedule_date):
             schedule_str = f.read()
     except FileNotFoundError:
         print(f"{err_msg}{schedule_date}.txt not exists")
-        raise
+        raise Exception
     else:
         schedule_date_list = schedule_date.split('-')
         year = int(schedule_date_list[0])
@@ -279,6 +310,7 @@ def read_from_txt(schedule_date):
                 schedule.task_list.append(task)
 
         schedule.display_schedule()
+        schedule.saved = True
 
 
 def schedule_managing(parser):
@@ -289,25 +321,35 @@ def schedule_managing(parser):
 
         args = parser.parse_args(input_.split())
 
-        if args.read:
-            read_from_txt(args.read[0])
-        if args.save:
-            schedule.save_to_txt()
-        if args.send:
-            schedule.send_to_wechat()
-        if args.display:
-            schedule.display_schedule()
-        if args.quit:
-            schedule.save_to_txt()
-            break
-
         try:
+            if args.read:
+                read_from_txt(args.read[0])
+            if args.save:
+                schedule.save_to_txt()
+            if args.send:
+                schedule.send_to_wechat()
+            if args.display:
+                schedule.display_schedule()
+            if args.quit:
+                if schedule.saved is False:
+                    input_ = input(f"{os.path.basename(schedule.path)} "
+                                   "is updated but not saved. save now? (y/n)\n")
+                    if input_ == 'y':
+                        schedule.save_to_txt()
+                        break
+                    elif input_ == 'n':
+                        break
+                    else:
+                        print(f"{err_msg}valid input: y, n")
+                else:
+                    break
+
             if not any([args.read, args.save, args.send, args.display,
                         args.quit]):
                 args.func(args)
         except:
-            print(traceback.format_exc())
-            # pass
+            # print(traceback.format_exc())
+            pass
 
 
 class ScheduleManagingArgTypeCheck:
@@ -420,8 +462,7 @@ class RestTimeAction(argparse.Action):
 
 if __name__ == '__main__':
     schedule_day = datetime.date.today() + datetime.timedelta(days=1)
-
-    schedule = Schedule(date=datetime.date(year=schedule_day.year, month=schedule_day.month, day=schedule_day.day))
+    schedule = Schedule(date=schedule_day)
 
     err_msg = "schedule_managing.py: error: "
 
@@ -527,4 +568,5 @@ if __name__ == '__main__':
     if args.run:
         if args.today:
             schedule.date -= datetime.timedelta(days=1)
+            schedule.set_path()
         schedule_managing(parser)

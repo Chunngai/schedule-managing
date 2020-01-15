@@ -5,6 +5,7 @@ import argparse
 import traceback
 import copy
 import re
+import os
 
 from wechat_file_helper import send
 
@@ -204,7 +205,7 @@ class Schedule:
 
     def save_to_txt(self):
         self._schedule_format()
-        with open(f"{self.date.isoformat()}.txt", 'w') as f:
+        with open(os.path.join("schedule", f"{self.date.isoformat()}.txt"), 'w') as f:
             f.write(self.schedule_str)
 
     def send_to_wechat(self):
@@ -216,6 +217,13 @@ class Schedule:
         print(self.schedule_str)
 
 
+def make_dir():
+    try:
+        os.mkdir("schedule")
+    except FileExistsError:
+        pass
+
+
 def read_from_txt(schedule_date):
     # saves the current schedule
     global schedule
@@ -223,7 +231,7 @@ def read_from_txt(schedule_date):
         schedule.save_to_txt()
 
     try:
-        with open(f"{schedule_date}.txt", 'r') as f:
+        with open(os.path.join("schedule", f"{schedule_date}.txt"), 'r') as f:
             schedule_str = f.read()
     except FileNotFoundError:
         print(f"{err_msg}{schedule_date}.txt not exists")
@@ -274,6 +282,8 @@ def read_from_txt(schedule_date):
 
 
 def schedule_managing(parser):
+    make_dir()
+
     while True:
         input_ = input()
 
@@ -292,7 +302,9 @@ def schedule_managing(parser):
             break
 
         try:
-            args.func(args)
+            if not any([args.read, args.save, args.send, args.display,
+                        args.quit]):
+                args.func(args)
         except:
             print(traceback.format_exc())
             # pass

@@ -73,6 +73,23 @@ class Schedule:
         print(f"{err_msg}time slice conflict")
         raise Exception
 
+    @staticmethod
+    def _duration_end_validation(start, duration, end):
+        if not duration and not end:
+            print(f"{err_msg}one of the arguments --duration/-d --end/-e is required")
+            raise Exception
+
+        if duration:
+            end = start + duration
+        elif end:
+            if start > end:
+                print(f"{err_msg}start time should be earlier than end time")
+                raise Exception
+
+            duration = end - start
+
+        return duration, end
+
     def _add_validation(self, start, duration, end, task_name):
         if not task_name:
             print(f"{err_msg}the following arguments are required: --task_name/-t")
@@ -89,23 +106,10 @@ class Schedule:
             if not start and (duration or end):
                 start = last_task_time_slice.end
 
-        # checks if start and (duration or end) exist
         if not start:
             print(f"{err_msg}the following arguments are required: --start/-s")
             raise Exception
-        if not duration and not end:
-            print(f"{err_msg}one of the arguments --duration/-d --end/-e is required")
-            raise Exception
-
-        # calculates the duration or the end time
-        if not duration:
-            if start > end:
-                print(f"{err_msg}start time should be earlier than end time")
-                raise Exception
-
-            duration = end - start
-        if not end:
-            end = start + duration
+        duration, end = self._duration_end_validation(start, duration, end)
 
         return start, duration, end, task_name
 
@@ -157,41 +161,40 @@ class Schedule:
         self.display_schedule()
 
     def modify_a_task(self, task_index, start, duration, end, task_name):
+        # start or task name should be provided
+        if not start and not task_name:
+            print(f"{err_msg}one of the arguments --start/- --task-name/-t is required")
+            raise Exception
+
         # modifies the task name
         if task_name:
             self.task_list[task_index].name = task_name
 
-        # modifies the task time slice
-        time_slice = self.task_list[task_index].time_slice
-        time_slice_copy = copy.deepcopy(time_slice)  # deep copy
+        # modifies the time slice
+        if start:
+            # modifies the task time slice
+            time_slice = self.task_list[task_index].time_slice
+            time_slice_copy = copy.deepcopy(time_slice)  # deep copy
 
-        time_slice_copy.start = start
-        if duration:
-            time_slice_copy.duration = duration
-            time_slice_copy.end = time_slice_copy.start + time_slice_copy.duration
-        elif end:
-            if time_slice_copy.start > time_slice_copy.end:
-                print(f"{err_msg}start time should be earlier than end time")
+            time_slice_copy.start = start
+            time_slice_copy.duration, time_slice_copy.end = self._duration_end_validation(start, duration, end)
+
+            # start time of the task should be later than that of its preceding task
+            if 0 < task_index and self.task_list[task_index - 1].time_slice.end > time_slice_copy.start:
+                print(f"{err_msg}time slice conflict")
                 raise Exception
 
-            time_slice_copy.end = end
-            time_slice_copy.duration = time_slice_copy.end - time_slice_copy.start
+            time_delta = time_slice_copy.start - time_slice.start
 
-        if 0 < task_index and self.task_list[task_index - 1].time_slice.end > time_slice_copy.start:
-            print(f"{err_msg}time slice conflict")
-            raise Exception
+            time_slice.start, time_slice.duration, time_slice.end = \
+                time_slice_copy.start, time_slice_copy.duration, time_slice_copy.end
 
-        time_delta = time_slice_copy.start - time_slice.start
+            # modifies the time slice of tasks after the current task
+            for i in range(task_index + 1, len(self.task_list)):
+                time_slice = self.task_list[i].time_slice
 
-        time_slice.start, time_slice.duration, time_slice.end = \
-            time_slice_copy.start, time_slice_copy.duration, time_slice_copy.end
-
-        # modifies the time slice of tasks after the current task
-        for i in range(task_index + 1, len(self.task_list)):
-            time_slice = self.task_list[i].time_slice
-
-            time_slice.start += time_delta
-            time_slice.end += time_delta
+                time_slice.start += time_delta
+                time_slice.end += time_delta
 
         self.display_schedule()
 
@@ -291,8 +294,8 @@ def schedule_managing(parser):
         try:
             args.func(args)
         except:
-            # print(traceback.format_exc())
-            pass
+            print(traceback.format_exc())
+            # pass
 
 
 class ScheduleManagingArgTypeCheck:

@@ -1,5 +1,4 @@
 #!/usr/bin/nv python
-# -*- coding: utf-8 -*-
 
 import datetime
 import argparse
@@ -115,7 +114,7 @@ class Schedule:
         hours, minutes = divmod(duration.seconds, 3600)
         minutes, seconds = divmod(minutes, 60)
 
-        return f"{hours}h {minutes}min"
+        return f"{str(hours).zfill(2)}h {str(minutes).zfill(2)}min"
 
     def _schedule_format(self):
         self.schedule_str = ''
@@ -126,7 +125,7 @@ class Schedule:
             if i > 0 \
                     and time_slice.start == self.task_list[i - 1].time_slice.start \
                     and time_slice.end == self.task_list[i - 1].time_slice.end:
-                self.schedule_str += f"({i}) {' '.ljust(22)}{name}\n"
+                self.schedule_str += f"({i}) {' '.ljust(26 - len(str(i)) - 2)}{name}\n"
             else:
                 start = time_slice.start.strftime("%H:%M")
                 duration = Schedule._strf(time_slice.duration)

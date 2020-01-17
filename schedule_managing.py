@@ -319,9 +319,9 @@ def schedule_managing(parser):
     while True:
         input_ = input()
 
-        args = parser.parse_args(input_.split())
-
         try:
+            args = parser.parse_args(input_.split())
+
             if args.read:
                 read_from_txt(args.read[0])
             if args.save:
